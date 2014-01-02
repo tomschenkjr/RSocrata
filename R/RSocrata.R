@@ -88,8 +88,16 @@ getContentAsDataFrame <- function(response) {
 		'application/json' = 
 				if(content(response, as='text') == "[ ]") # empty json?
 					data.frame() # empty data frame
-				else
-					data.frame(t(sapply(fromJSON(rawToChar(content(response, as='raw'))), unlist)), stringsAsFactors=FALSE)
+				else {
+					jsonChar <- unlist(fromJSON(rawToChar(content(response, as='raw'))))
+					colNames <- unique(names(jsonChar))
+					d <- data.frame(matrix(jsonChar, ncol=length(colNames), byrow=F), stringsAsFactors=FALSE)
+					d <- data.frame(matrix(jsonChar, nrow=113, byrow=R), stringsAsFactors=FALSE)
+					# e <- fromJSON(response$headers$'x-soda2-fields') # The names for the data frame
+					names(d) <- e # Gives names to data frame from x-soda2-fields
+					# data.frame(t(sapply(fromJSON(rawToChar(content(response, as='raw'))), unlist)), stringsAsFactors=FALSE)
+					d
+				}
 	) # end switch
 }
 
@@ -125,19 +133,20 @@ read.socrata <- function(url) {
 	if(substr(parsedUrl$path, 1, 9) != 'resource/')
 		stop("Error in read.socrata: url ", url, " is not a Socrata SoDA resource.")
 	mimeType <- guess_media(parsedUrl$path)
-	if(mimeType != 'text/csv')
-		stop("Error in read.socrata: ", mimeType, " not a supported data format.")
+	# if(mimeType != 'text/csv')
+	# 	stop("Error in read.socrata: ", mimeType, " not a supported data format.")
 	response <- getResponse(url)
-	page <- getContentAsDataFrame(response)
-	result <- page
-	dataTypes <- getSodaTypes(response)
-	while (nrow(page) > 0) { # more to come maybe?
-		query <- paste(url, if(is.null(parsedUrl$query)) {'?'} else {"&"}, '$offset=', nrow(result), sep='')
-		response <- getResponse(query)
-		page <- getContentAsDataFrame(response)
-		result <- rbind(result, page) # accumulate
-	}	
-	# convert Socrata calendar dates to posix format
+	# if(mimeType == 'text/csv'){
+		page <- getContentAsDataFrame(response) ## WHEN .JSON, this only returns a 1 x N data frame. When CSV, it returns an N x M data frame.
+		result <- page
+		dataTypes <- getSodaTypes(response)
+		while (nrow(page) > 0) { # more to come maybe?
+			query <- paste(url, if(is.null(parsedUrl$query)) {'?'} else {"&"}, '$offset=', nrow(result), sep='')
+			response <- getResponse(query)
+			page <- getContentAsDataFrame(response)
+			result <- rbind(result, page) # accumulate
+		}
+	# convert Socrata calendar dates to pageosix format
 	for(columnName in colnames(page)[!is.na(dataTypes[fieldName(colnames(page))]) & dataTypes[fieldName(colnames(page))] == 'calendar_date']) {
 		result[[columnName]] <- posixify(result[[columnName]])
 	}
